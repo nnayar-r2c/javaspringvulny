@@ -1,14 +1,14 @@
-on:
+on: 
+  workflow_dispatch: 
   pull_request: {}
   push:
     branches:
     - main
-    - master
     paths:
     - .github/workflows/semgrep.yml
   schedule:
   # random HH:MM to avoid a load spike on GitHub Actions at 00:00
-  - cron: 0 1 * * *
+  - cron: 05 5 * * 1
 name: Semgrep
 jobs:
   buildGradleLockFile: 
@@ -19,23 +19,28 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '17'
-          distribution: 'temurin'
-      - name: Build Dependency Tree
+          distribution: 'temurin' 
+      - name: Build with Gradle
+        run: | 
+          export GRADLE_USER_HOME=`pwd`/.gradle
+          echo "dependencyLocking { lockAllConfigurations() }" >> build.gradle
+          ./gradlew assemble
+          ./gradlew check
+          gradle dependencies --write-locks
+          gradle clean compileJava
+      - name: Build Dependency Lock File
         run: gradle dependencies --write-locks
-      - name: Upload Dependency Tree Artifact     
+      - name: Upload Gradle Lock File
         uses: actions/upload-artifact@v3
         with:
           name: gradlelockfile
           path: gradle.lockfile
-
   semgrep:
     needs: buildGradleLockFile
     name: Scan
     runs-on: ubuntu-20.04
     env:
       SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-      SEMGREP_REPO_NAME: 'from-github/javaspringvulny'
-      SEMGREP_REPO_URL: 'https://github.com/r2c-CSE/javaspringvulny'
     container:
       image: returntocorp/semgrep
     steps:
